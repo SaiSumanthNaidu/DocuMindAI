@@ -1,5 +1,7 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework.response import Response
 
 from django.contrib.auth.models import User
 
@@ -19,6 +21,7 @@ from .resume_parser import (
 )
 
 from .ai_summary import generate_resume_summary
+from django.db.models import Q
 
 
 # Tesseract Path
@@ -85,6 +88,70 @@ class DocumentUploadView(generics.CreateAPIView):
         except Exception as e:
             print("OCR Error:", e)
 
+    
+class DashboardView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        documents = Document.objects.filter(
+            user=request.user
+        )
+
+        latest_resume = None
+
+        if documents.exists():
+            latest_resume = documents.last().title
+
+        total_skills = 0
+
+        for doc in documents:
+            if doc.skills:
+                skills = [
+                    skill.strip()
+                    for skill in doc.skills.split(",")
+                    if skill.strip()
+                    ]
+
+            total_skills += len(skills)
+
+        data = {
+            "total_resumes": documents.count(),
+            "latest_resume": latest_resume,
+            "total_skills": total_skills,
+            "uploaded_documents": [
+                doc.title for doc in documents
+            ]
+        }
+
+        return Response(data)
+
+class ResumeSearchView(generics.ListAPIView):
+
+    serializer_class = DocumentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+
+        queryset = Document.objects.filter(
+            user=self.request.user
+        )
+
+        skill = self.request.GET.get("skill")
+        name = self.request.GET.get("name")
+
+        if skill:
+            queryset = queryset.filter(
+                skills__icontains=skill
+            )
+
+        if name:
+            queryset = queryset.filter(
+                name__icontains=name
+            )
+
+        return queryset
 
 class MyDocumentsView(generics.ListAPIView):
 

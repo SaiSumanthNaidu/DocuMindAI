@@ -14,33 +14,15 @@ class Document(models.Model):
     title = models.CharField(max_length=255)
 
     file = models.FileField(
-        upload_to='uploads/'
+        upload_to="uploads/"
     )
 
     extracted_text = models.TextField(
         blank=True
     )
 
-    name = models.CharField(
-        max_length=255,
-        blank=True
-    )
-
-    email = models.CharField(
-        max_length=255,
-        blank=True
-    )
-
-    phone = models.CharField(
-        max_length=20,
-        blank=True
-    )
-
-    skills = models.TextField(
-        blank=True
-    )
-
-    summary = models.TextField(
+    structured_data = models.JSONField(
+        null=True,
         blank=True
     )
 

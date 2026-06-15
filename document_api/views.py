@@ -13,18 +13,9 @@ from PIL import Image
 import pytesseract
 from pdf2image import convert_from_path
 
-from .resume_parser import (
-    extract_email,
-    extract_phone,
-    extract_name,
-    extract_skills
-)
-
-from .ai_summary import generate_resume_summary
-from django.db.models import Q
+from .document_parser import analyze_document
 
 
-# Tesseract Path
 pytesseract.pytesseract.tesseract_cmd = (
     r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 )
@@ -38,7 +29,6 @@ class RegisterView(generics.CreateAPIView):
 class DocumentUploadView(generics.CreateAPIView):
 
     permission_classes = [IsAuthenticated]
-
     queryset = Document.objects.all()
     serializer_class = DocumentSerializer
 
@@ -51,9 +41,9 @@ class DocumentUploadView(generics.CreateAPIView):
         extracted_text = ""
 
         try:
+
             file_path = document.file.path
 
-            # PDF OCR
             if file_path.lower().endswith(".pdf"):
 
                 pages = convert_from_path(
@@ -62,33 +52,40 @@ class DocumentUploadView(generics.CreateAPIView):
                 )
 
                 for page in pages:
-                    extracted_text += pytesseract.image_to_string(page)
-                    extracted_text += "\n"
+                    extracted_text += (
+                        pytesseract.image_to_string(page)
+                        + "\n"
+                    )
 
-            # Image OCR
             else:
+
                 image = Image.open(file_path)
-                extracted_text = pytesseract.image_to_string(image)
+
+                extracted_text = pytesseract.image_to_string(
+                    image
+                )
 
             document.extracted_text = extracted_text
 
-            document.name = extract_name(extracted_text)
-            document.email = extract_email(extracted_text)
-            document.phone = extract_phone(extracted_text)
-
-            skills = extract_skills(extracted_text)
-            document.skills = ", ".join(skills)
-
-            document.summary = generate_resume_summary(
+            document.structured_data = analyze_document(
                 extracted_text
             )
 
             document.save()
 
         except Exception as e:
-            print("OCR Error:", e)
 
-    
+            print("OCR / AI Error:", str(e))
+
+            document.extracted_text = extracted_text
+
+            document.structured_data = {
+                "error": str(e)
+            }
+
+            document.save()
+
+
 class DashboardView(APIView):
 
     permission_classes = [IsAuthenticated]
@@ -99,33 +96,21 @@ class DashboardView(APIView):
             user=request.user
         )
 
-        latest_resume = None
+        latest_document = None
 
         if documents.exists():
-            latest_resume = documents.last().title
-
-        total_skills = 0
-
-        for doc in documents:
-            if doc.skills:
-                skills = [
-                    skill.strip()
-                    for skill in doc.skills.split(",")
-                    if skill.strip()
-                    ]
-
-            total_skills += len(skills)
+            latest_document = documents.last().title
 
         data = {
-            "total_resumes": documents.count(),
-            "latest_resume": latest_resume,
-            "total_skills": total_skills,
+            "total_documents": documents.count(),
+            "latest_document": latest_document,
             "uploaded_documents": [
                 doc.title for doc in documents
             ]
         }
 
         return Response(data)
+
 
 class ResumeSearchView(generics.ListAPIView):
 
@@ -138,20 +123,17 @@ class ResumeSearchView(generics.ListAPIView):
             user=self.request.user
         )
 
-        skill = self.request.GET.get("skill")
-        name = self.request.GET.get("name")
+        keyword = self.request.GET.get(
+            "keyword"
+        )
 
-        if skill:
+        if keyword:
             queryset = queryset.filter(
-                skills__icontains=skill
-            )
-
-        if name:
-            queryset = queryset.filter(
-                name__icontains=name
+                extracted_text__icontains=keyword
             )
 
         return queryset
+
 
 class MyDocumentsView(generics.ListAPIView):
 
@@ -159,6 +141,7 @@ class MyDocumentsView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+
         return Document.objects.filter(
             user=self.request.user
         )

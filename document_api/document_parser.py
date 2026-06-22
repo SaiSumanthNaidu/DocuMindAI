@@ -1,216 +1,113 @@
 import re
 
+from .parsers.aadhaar_parser import parse_aadhaar
+from .parsers.pan_parser import parse_pan
+from .parsers.voter_parser import parse_voter
+from .parsers.passport_parser import parse_passport
+from .parsers.dl_parser import parse_dl
+from .parsers.invoice_parser import parse_invoice
 
-def analyze_document(text):
 
-    text_upper = text.upper()
+def analyze_document(front_text, back_text=""):
 
-    lines = [
-        line.strip()
-        for line in text.split("\n")
-        if line.strip()
-    ]
+    text = (
+        front_text +
+        "\n" +
+        back_text
+    ).upper()
 
-    # ==========================
-    # PAN CARD
-    # ==========================
+    # Aadhaar
+
     if (
-        "INCOME TAX DEPARTMENT" in text_upper
-        or "PERMANENT ACCOUNT NUMBER CARD" in text_upper
-        or "ACCOUNT NUMBER CARD" in text_upper
+        "AADHAAR" in text
+        or "UIDAI" in text
+        or "1947" in text
     ):
-
-        result = {
-            "document_type": "PAN Card"
-        }
-
-        pan_match = re.search(
-            r"[A-Z]{5}[0-9]{4}[A-Z]",
-            text
+        return parse_aadhaar(
+            front_text,
+            back_text
         )
 
-        if pan_match:
-            result["pan_number"] = pan_match.group()
+    # PAN
 
-        dob_match = re.search(
-            r"\d{2}/\d{2}/\d{4}",
-            text
-        )
-
-        if dob_match:
-            result["dob"] = dob_match.group()
-
-        for i, line in enumerate(lines):
-
-            if "FATHER" in line.upper():
-
-                if i - 1 >= 0:
-                    result["name"] = lines[i - 1]
-
-                if i + 1 < len(lines):
-
-                    father_name = re.sub(
-                        r"\d+",
-                        "",
-                        lines[i + 1]
-                    ).strip()
-
-                    result["father_name"] = father_name
-
-        return result
-
-    # ==========================
-    # AADHAAR CARD
-    # ==========================
-    elif (
-        "AADHAAR" in text_upper
-        or "UNIQUE IDENTIFICATION AUTHORITY" in text_upper
+    if (
+        "INCOME TAX" in text
+        or "PERMANENT ACCOUNT" in text
+        or "INCOME TAX DEPARTMENT" in text
     ):
-
-        result = {
-            "document_type": "Aadhaar Card"
-        }
-
-        aadhaar_match = re.search(
-            r"\d{4}\s\d{4}\s\d{4}",
-            text
+        return parse_pan(
+            front_text,
+            back_text
         )
 
-        if aadhaar_match:
-            result["aadhaar_number"] = aadhaar_match.group()
+    # Voter
 
-        dob_match = re.search(
-            r"\d{2}/\d{2}/\d{4}",
-            text
-        )
-
-        if dob_match:
-            result["dob"] = dob_match.group()
-
-        gender_match = re.search(
-            r"MALE|FEMALE",
-            text_upper
-        )
-
-        if gender_match:
-            result["gender"] = gender_match.group().title()
-
-        for line in lines:
-
-            if (
-                len(line.split()) >= 2
-                and not any(
-                    word in line.upper()
-                    for word in [
-                        "AADHAAR",
-                        "INDIA",
-                        "GOVERNMENT",
-                        "DOB",
-                        "MALE",
-                        "FEMALE"
-                    ]
-                )
-            ):
-                result["name"] = line
-                break
-
-        return result
-
-    # ==========================
-    # RESUME
-    # ==========================
-    elif (
-        "SKILLS" in text_upper
-        or "EDUCATION" in text_upper
-        or "EXPERIENCE" in text_upper
+    if (
+        "ELECTION" in text
+        or "ELECTOR" in text
+        or "EPIC" in text
     ):
-
-        result = {
-            "document_type": "Resume"
-        }
-
-        email_match = re.search(
-            r'[\w\.-]+@[\w\.-]+\.\w+',
-            text
+        return parse_voter(
+            front_text,
+            back_text
         )
 
-        if email_match:
-            result["email"] = email_match.group()
+    # Driving License
 
-        phone_match = re.search(
-            r'\+?\d[\d\s-]{8,15}',
+    if (
+        "DRIVING" in text
+        or "LICENCE" in text
+        or "LICENSE" in text
+        or "DATE OF FIRST ISSUE" in text
+        or "VALIDITY" in text
+        or re.search(
+            r"TS\d{10,}",
             text
         )
-
-        if phone_match:
-            result["phone"] = phone_match.group()
-
-        if lines:
-            result["name"] = lines[0]
-
-        return result
-
-    # ==========================
-    # DRIVING LICENSE
-    # ==========================
-    elif (
-        "DRIVING LICENCE" in text_upper
-        or "DRIVING LICENSE" in text_upper
     ):
-
-        result = {
-            "document_type": "Driving License"
-        }
-
-        dl_match = re.search(
-            r"[A-Z]{2}[0-9]{2}\s?[0-9]{11}",
-            text_upper
+        return parse_dl(
+            front_text,
+            back_text
         )
 
-        if dl_match:
-            result["license_number"] = dl_match.group()
+    # Passport
 
-        dob_match = re.search(
-            r"\d{2}/\d{2}/\d{4}",
-            text
+    if (
+        "PASSPORT" in text
+        or "P<IND" in text
+        or (
+            "INDIAN" in text
+            and re.search(
+                r"[A-Z][0-9]{7}",
+                text
+            )
+        )
+    ):
+        return parse_passport(
+            front_text,
+            back_text
         )
 
-        if dob_match:
-            result["dob"] = dob_match.group()
+    # Invoice
 
-        return result
-
-    # ==========================
-    # PASSPORT
-    # ==========================
-    elif "PASSPORT" in text_upper:
-
-        result = {
-            "document_type": "Passport"
-        }
-
-        passport_match = re.search(
-            r"[A-Z][0-9]{7}",
-            text_upper
+    if (
+        "GSTIN" in text
+        or "INVOICE" in text
+        or "TAX INVOICE" in text
+        or "BILL" in text
+        or "TOTAL" in text
+        or "AMOUNT" in text
+    ):
+        return parse_invoice(
+            front_text,
+            back_text
         )
 
-        if passport_match:
-            result["passport_number"] = passport_match.group()
-
-        dob_match = re.search(
-            r"\d{2}/\d{2}/\d{4}",
-            text
-        )
-
-        if dob_match:
-            result["dob"] = dob_match.group()
-
-        return result
-
-    # ==========================
-    # UNKNOWN DOCUMENT
-    # ==========================
     return {
         "document_type": "Unknown",
-        "raw_text_preview": text[:500]
+        "raw_text_preview": (
+            front_text +
+            "\n" +
+            back_text
+        )[:500]
     }

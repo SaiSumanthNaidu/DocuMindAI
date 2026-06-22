@@ -11,14 +11,33 @@ class Document(models.Model):
         blank=True
     )
 
-    title = models.CharField(max_length=255)
+    title = models.CharField(
+        max_length=255
+    )
 
-    file = models.FileField(
+    front_file = models.FileField(
         upload_to="uploads/"
     )
 
-    extracted_text = models.TextField(
+    back_file = models.FileField(
+        upload_to="uploads/",
+        null=True,
         blank=True
+    )
+
+    front_text = models.TextField(
+        blank=True,
+        default=""
+    )
+
+    back_text = models.TextField(
+        blank=True,
+        default=""
+    )
+
+    extracted_text = models.TextField(
+        blank=True,
+        default=""
     )
 
     structured_data = models.JSONField(
